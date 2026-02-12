@@ -1,73 +1,218 @@
-# Welcome to your Lovable project
+#  LearnMate – Intelligent Adaptive AI Learning System
 
-## Project info
+---
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+##  Overview
 
-## How can I edit this code?
+**LearnMate** is an AI-powered adaptive learning platform designed to provide personalized, data-driven, and intelligent educational support. LearnMate focuses on optimizing how students learn by tracking conceptual understanding, learning behavior, and performance trends.
 
-There are several ways of editing your application.
+Unlike traditional AI chat tools, LearnMate emphasizes **learning optimization, curriculum intelligence, and concept mastery tracking**.
 
-**Use Lovable**
+---
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+##  Project Objective
 
-Changes made via Lovable will be committed automatically to this repo.
+- Deliver personalized learning experiences  
+- Detect knowledge gaps in real time  
+- Dynamically adapt learning paths  
+- Improve long-term knowledge retention  
+- Provide intelligent academic assistance  
 
-**Use your preferred IDE**
+---
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+##  Problems in Current AI Learning Systems
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+- No long-term learner memory  
+- Weak personalization  
+- No curriculum sequencing  
+- No concept mastery tracking  
+- Risk of hallucinated explanations  
+- No cognitive or engagement awareness  
 
-Follow these steps:
+---
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+##  Key Features
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+###  AI Tutoring
+- Context-aware explanations  
+- Step-by-step concept teaching  
+- Retrieval-Augmented Learning  
 
-# Step 3: Install the necessary dependencies.
-npm i
+### Learning Analytics
+- Concept mastery tracking  
+- Performance trend analysis  
+- Learning efficiency monitoring  
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+###  Adaptive Curriculum
+- Dynamic topic sequencing  
+- Prerequisite enforcement  
+- Personalized learning path  
 
-**Edit a file directly in GitHub**
+###  Assessment Engine
+- Quiz generation  
+- Concept-based evaluation  
+- Weak topic detection  
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+###  Engagement Monitoring
+- Detects confusion patterns  
+- Identifies disengagement trends  
+- Supports adaptive teaching style  
 
-**Use GitHub Codespaces**
+---
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+##  System Architecture
 
-## What technologies are used for this project?
+User Interface
+↓
+Input Processing
+↓
+AI Learning Engine
+↓
+Knowledge & Learning Database
+↓
+Analytics & Recommendation Engine
+↓
+Output (Learning Content + Feedback + Assessment)
 
-This project is built with:
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+---
 
-## How can I deploy this project?
+##  Tech Stack
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+### Programming
+- Python  
+- JavaScript / TypeScript  
 
-## Can I connect a custom domain to my Lovable project?
+### AI & ML
+- LLM APIs / Open LLM Models  
+- Sentence Transformers  
+- Scikit-learn / Deep Learning  
 
-Yes, you can!
+### Backend
+- FastAPI / Flask  
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+### Frontend
+- React.js / Next.js / Streamlit  
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+### Database
+- FAISS / Chroma (Vector DB)  
+- PostgreSQL / MongoDB  
+- Neo4j (Optional Knowledge Graph)  
+
+### Deployment
+- Docker  
+- Kubernetes (Optional)  
+- AWS / GCP / Firebase  
+
+---
+
+##  Core Modules
+
+### Learner Cognitive Profiling
+Tracks knowledge level, learning speed, mistake patterns, and engagement.
+
+### AI Tutoring Engine
+Provides concept explanation, examples, and academic Q&A using LLM + RAG.
+
+### Adaptive Curriculum Engine
+Controls topic sequencing, difficulty level, and practice scheduling.
+
+### Assessment Engine
+Generates quizzes and detects concept-level weaknesses.
+
+### Learning Analytics Engine
+Generates dashboards, performance prediction, and study recommendations.
+
+---
+
+##  Deployment Modes
+
+### Local Mode
+- Local vector database  
+- Open-source LLM  
+- Local analytics  
+
+### Hybrid Mode (Recommended)
+- Local learner intelligence  
+- Cloud LLM for heavy reasoning  
+
+### Cloud Mode
+- Fully cloud hosted  
+
+---
+
+##  Installation
+
+### Clone Repository
+
+## 🛠 Tech Stack
+
+### Programming
+- Python  
+- JavaScript / TypeScript  
+
+### AI & ML
+- LLM APIs / Open LLM Models  
+- Sentence Transformers  
+- Scikit-learn / Deep Learning  
+
+### Backend
+- FastAPI / Flask  
+
+### Frontend
+- React.js / Next.js / Streamlit  
+
+### Database
+- FAISS / Chroma (Vector DB)  
+- PostgreSQL / MongoDB  
+- Neo4j (Optional Knowledge Graph)  
+
+### Deployment
+- Docker  
+- Kubernetes (Optional)  
+- AWS / GCP / Firebase  
+
+---
+
+## 🧩 Core Modules
+
+### Learner Cognitive Profiling
+Tracks knowledge level, learning speed, mistake patterns, and engagement.
+
+### AI Tutoring Engine
+Provides concept explanation, examples, and academic Q&A using LLM + RAG.
+
+### Adaptive Curriculum Engine
+Controls topic sequencing, difficulty level, and practice scheduling.
+
+### Assessment Engine
+Generates quizzes and detects concept-level weaknesses.
+
+### Learning Analytics Engine
+Generates dashboards, performance prediction, and study recommendations.
+
+---
+
+## 💻 Deployment Modes
+
+### Local Mode
+- Local vector database  
+- Open-source LLM  
+- Local analytics  
+
+### Hybrid Mode (Recommended)
+- Local learner intelligence  
+- Cloud LLM for heavy reasoning  
+
+### Cloud Mode
+- Fully cloud hosted  
+
+---
+
+## 📦 Installation
+
+### Clone Repository
+
+git clone https://github.com/yourusername/learnmate.git
+cd learnmate
+
