@@ -21,10 +21,23 @@ serve(async (req) => {
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    // Use anon key with user's JWT to enforce RLS/storage policies
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    // Validate the user's token
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const { filePath, fileName } = await req.json();
 
@@ -35,7 +48,7 @@ serve(async (req) => {
       });
     }
 
-    // Download the PDF from storage
+    // Download the PDF from storage — RLS enforced via user JWT
     const { data: fileData, error: downloadError } = await supabase.storage
       .from("documents")
       .download(filePath);

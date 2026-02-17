@@ -72,7 +72,7 @@ export function QuizViewer({ documentId, userId }: QuizViewerProps) {
     setIsGenerating(true);
     try {
       const { data, error } = await supabase.functions.invoke('generate-quiz', {
-        body: { documentId, questionCount: 10, userId }
+        body: { documentId, questionCount: 10 }
       });
 
       if (error) throw error;
