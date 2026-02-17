@@ -12,19 +12,17 @@ serve(async (req) => {
   }
 
   try {
-    const { documentId, questionCount = 10, userId } = await req.json();
-    
-    if (!documentId || !userId) {
+    // Validate auth
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
       return new Response(
-        JSON.stringify({ error: 'Document ID and User ID are required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log(`Generating ${questionCount} quiz questions for document ${documentId}`);
-
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
 
     if (!openaiApiKey) {
@@ -34,9 +32,34 @@ serve(async (req) => {
       );
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    // Use anon key with user JWT to enforce RLS
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
 
-    // Get document info
+    // Extract userId from JWT instead of trusting client
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    const userId = claimsData.claims.sub;
+
+    const { documentId, questionCount = 10 } = await req.json();
+    
+    if (!documentId) {
+      return new Response(
+        JSON.stringify({ error: 'Document ID is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`Generating ${questionCount} quiz questions for document ${documentId}`);
+
+    // Get document info — RLS enforced, user can only access own documents
     const { data: document, error: docError } = await supabase
       .from('documents')
       .select('title, content')
@@ -50,7 +73,7 @@ serve(async (req) => {
       );
     }
 
-    // Get document chunks for context
+    // Get document chunks for context — RLS enforced
     const { data: chunks, error: chunksError } = await supabase
       .from('document_chunks')
       .select('content')
@@ -144,7 +167,7 @@ ${truncatedContent}`;
       );
     }
 
-    // Create quiz record
+    // Create quiz record with JWT-validated userId
     const { data: quiz, error: quizError } = await supabase
       .from('quizzes')
       .insert({

@@ -5,6 +5,44 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function isBlockedUrl(url: string): boolean {
+  let urlObj: URL;
+  try {
+    urlObj = new URL(url);
+  } catch {
+    return true;
+  }
+
+  // Only allow http and https
+  if (!["http:", "https:"].includes(urlObj.protocol)) {
+    return true;
+  }
+
+  const hostname = urlObj.hostname.toLowerCase();
+
+  // Block localhost and loopback
+  const blockedHosts = ["localhost", "0.0.0.0", "[::]", "[::1]"];
+  if (blockedHosts.includes(hostname)) return true;
+
+  // Block IP-based access to private/reserved ranges
+  const ipPatterns = [
+    /^127\./,                          // loopback
+    /^10\./,                           // RFC 1918
+    /^172\.(1[6-9]|2\d|3[01])\./,      // RFC 1918
+    /^192\.168\./,                     // RFC 1918
+    /^169\.254\./,                     // link-local
+    /^0\./,                            // current network
+    /^100\.(6[4-9]|[7-9]\d|1[0-2]\d)\./, // CGNAT
+    /^198\.18\./,                      // benchmarking
+  ];
+  if (ipPatterns.some((p) => p.test(hostname))) return true;
+
+  // Block metadata endpoints
+  if (hostname === "169.254.169.254") return true;
+
+  return false;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -28,12 +66,26 @@ serve(async (req) => {
       });
     }
 
-    // Fetch the URL content
+    // SSRF protection: validate URL
+    if (isBlockedUrl(url)) {
+      return new Response(JSON.stringify({ error: "Invalid or blocked URL" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Fetch the URL content with timeout and size limits
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
     const response = await fetch(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (compatible; LearnMate/1.0)",
       },
+      signal: controller.signal,
     });
+
+    clearTimeout(timeout);
 
     if (!response.ok) {
       return new Response(JSON.stringify({ error: "Failed to fetch URL" }), {
@@ -43,6 +95,14 @@ serve(async (req) => {
     }
 
     const html = await response.text();
+
+    // Size limit: 5MB
+    if (html.length > 5_000_000) {
+      return new Response(JSON.stringify({ error: "Content too large" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Extract title
     const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
