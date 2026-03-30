@@ -15,7 +15,8 @@ import {
   BookOpen,
   Brain,
   Layers,
-  HelpCircle
+  HelpCircle,
+  BarChart3
 } from 'lucide-react';
 import DocumentUpload from '@/components/DocumentUpload';
 import DocumentList from '@/components/DocumentList';
