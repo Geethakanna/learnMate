@@ -39,7 +39,7 @@ export default function Dashboard() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
   const [showUpload, setShowUpload] = useState(false);
-  const [view, setView] = useState<'documents' | 'qa' | 'flashcards' | 'quiz'>('documents');
+  const [view, setView] = useState<'documents' | 'qa' | 'flashcards' | 'quiz' | 'progress'>('documents');
   const [loadingDocs, setLoadingDocs] = useState(true);
 
   useEffect(() => {
