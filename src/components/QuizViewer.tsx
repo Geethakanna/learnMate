@@ -161,6 +161,16 @@ export function QuizViewer({ documentId, userId }: QuizViewerProps) {
         total_questions: questions.length,
         answers: [...answers, parseInt(selectedAnswer || "0")],
       });
+
+      // Track MCQ stats and activity
+      if (selectedQuiz?.document_id) {
+        await updateMcqStats(selectedQuiz.document_id, questions.length, correctCount);
+      }
+      logActivity('quiz_completed', selectedQuiz?.document_id || undefined, {
+        quiz_id: selectedQuiz!.id,
+        score: correctCount,
+        total: questions.length,
+      });
     }
   };
 

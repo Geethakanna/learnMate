@@ -22,6 +22,8 @@ import DocumentList from '@/components/DocumentList';
 import QAInterface from '@/components/QAInterface';
 import { FlashcardViewer } from '@/components/FlashcardViewer';
 import { QuizViewer } from '@/components/QuizViewer';
+import { ProgressReport } from '@/components/ProgressReport';
+import { logActivity } from '@/lib/tracking';
 
 interface Document {
   id: string;
