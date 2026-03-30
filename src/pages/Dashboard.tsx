@@ -383,6 +383,12 @@ export default function Dashboard() {
             )}
           </div>
         )}
+
+        {view === 'progress' && (
+          <div className="animate-fade-in">
+            <ProgressReport />
+          </div>
+        )}
       </main>
     </div>
   );
