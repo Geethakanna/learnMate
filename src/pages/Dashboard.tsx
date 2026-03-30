@@ -159,6 +159,17 @@ export default function Dashboard() {
                 <HelpCircle className="w-4 h-4 inline mr-2" />
                 Quizzes
               </button>
+              <button
+                onClick={() => setView('progress')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  view === 'progress'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <BarChart3 className="w-4 h-4 inline mr-2" />
+                Progress
+              </button>
             </nav>
 
             <Button variant="ghost" size="icon" onClick={handleSignOut}>
