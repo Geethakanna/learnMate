@@ -129,11 +129,14 @@ export function FlashcardViewer({ documentId, documentTitle }: FlashcardViewerPr
   const nextCard = () => {
     setIsFlipped(false);
     setCurrentIndex((prev) => (prev + 1) % flashcards.length);
+    updateFlashcardStats(documentId, 'view');
+    logActivity('flashcard_viewed', documentId);
   };
 
   const prevCard = () => {
     setIsFlipped(false);
     setCurrentIndex((prev) => (prev - 1 + flashcards.length) % flashcards.length);
+    updateFlashcardStats(documentId, 'revisit');
   };
 
   const getDifficultyColor = (difficulty: string) => {

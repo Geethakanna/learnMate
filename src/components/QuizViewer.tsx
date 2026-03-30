@@ -8,6 +8,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, XCircle, ArrowRight, RotateCcw, Trophy, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { logActivity, updateMcqStats } from "@/lib/tracking";
 
 interface QuizQuestion {
   id: string;
