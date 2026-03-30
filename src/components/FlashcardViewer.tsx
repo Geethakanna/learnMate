@@ -93,6 +93,7 @@ export function FlashcardViewer({ documentId, documentTitle }: FlashcardViewerPr
       });
       
       await fetchFlashcards();
+      logActivity('flashcard_generated', documentId, { count: data.count });
     } catch (error: any) {
       console.error("Error generating flashcards:", error);
       toast({
