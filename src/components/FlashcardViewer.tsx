@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { logActivity, updateFlashcardStats } from "@/lib/tracking";
 import { 
   Sparkles, 
   ChevronLeft, 
@@ -92,6 +93,7 @@ export function FlashcardViewer({ documentId, documentTitle }: FlashcardViewerPr
       });
       
       await fetchFlashcards();
+      logActivity('flashcard_generated', documentId, { count: data.count });
     } catch (error: any) {
       console.error("Error generating flashcards:", error);
       toast({
@@ -127,11 +129,14 @@ export function FlashcardViewer({ documentId, documentTitle }: FlashcardViewerPr
   const nextCard = () => {
     setIsFlipped(false);
     setCurrentIndex((prev) => (prev + 1) % flashcards.length);
+    updateFlashcardStats(documentId, 'view');
+    logActivity('flashcard_viewed', documentId);
   };
 
   const prevCard = () => {
     setIsFlipped(false);
     setCurrentIndex((prev) => (prev - 1 + flashcards.length) % flashcards.length);
+    updateFlashcardStats(documentId, 'revisit');
   };
 
   const getDifficultyColor = (difficulty: string) => {

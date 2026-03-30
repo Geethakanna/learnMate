@@ -8,6 +8,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, XCircle, ArrowRight, RotateCcw, Trophy, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { logActivity, updateMcqStats } from "@/lib/tracking";
 
 interface QuizQuestion {
   id: string;
@@ -159,6 +160,16 @@ export function QuizViewer({ documentId, userId }: QuizViewerProps) {
         score: correctCount,
         total_questions: questions.length,
         answers: [...answers, parseInt(selectedAnswer || "0")],
+      });
+
+      // Track MCQ stats and activity
+      if (selectedQuiz?.document_id) {
+        await updateMcqStats(selectedQuiz.document_id, questions.length, correctCount);
+      }
+      logActivity('quiz_completed', selectedQuiz?.document_id || undefined, {
+        quiz_id: selectedQuiz!.id,
+        score: correctCount,
+        total: questions.length,
       });
     }
   };

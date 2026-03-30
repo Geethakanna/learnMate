@@ -15,13 +15,16 @@ import {
   BookOpen,
   Brain,
   Layers,
-  HelpCircle
+  HelpCircle,
+  BarChart3
 } from 'lucide-react';
 import DocumentUpload from '@/components/DocumentUpload';
 import DocumentList from '@/components/DocumentList';
 import QAInterface from '@/components/QAInterface';
 import { FlashcardViewer } from '@/components/FlashcardViewer';
 import { QuizViewer } from '@/components/QuizViewer';
+import { ProgressReport } from '@/components/ProgressReport';
+import { logActivity } from '@/lib/tracking';
 
 interface Document {
   id: string;
@@ -37,7 +40,7 @@ export default function Dashboard() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
   const [showUpload, setShowUpload] = useState(false);
-  const [view, setView] = useState<'documents' | 'qa' | 'flashcards' | 'quiz'>('documents');
+  const [view, setView] = useState<'documents' | 'qa' | 'flashcards' | 'quiz' | 'progress'>('documents');
   const [loadingDocs, setLoadingDocs] = useState(true);
 
   useEffect(() => {
@@ -49,6 +52,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (user) {
       fetchDocuments();
+      logActivity('login');
     }
   }, [user]);
 
@@ -155,6 +159,17 @@ export default function Dashboard() {
               >
                 <HelpCircle className="w-4 h-4 inline mr-2" />
                 Quizzes
+              </button>
+              <button
+                onClick={() => setView('progress')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  view === 'progress'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <BarChart3 className="w-4 h-4 inline mr-2" />
+                Progress
               </button>
             </nav>
 
@@ -367,6 +382,12 @@ export default function Dashboard() {
                 />
               </div>
             )}
+          </div>
+        )}
+
+        {view === 'progress' && (
+          <div className="animate-fade-in">
+            <ProgressReport />
           </div>
         )}
       </main>
