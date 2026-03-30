@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { logActivity, updateFlashcardStats } from "@/lib/tracking";
 import { 
   Sparkles, 
   ChevronLeft, 
