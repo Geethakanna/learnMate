@@ -51,6 +51,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (user) {
       fetchDocuments();
+      logActivity('login');
     }
   }, [user]);
 
