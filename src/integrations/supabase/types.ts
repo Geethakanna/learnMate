@@ -94,6 +94,44 @@ export type Database = {
         }
         Relationships: []
       }
+      flashcard_stats: {
+        Row: {
+          completed_count: number
+          document_id: string | null
+          id: string
+          revisit_count: number
+          updated_at: string
+          user_id: string
+          viewed_count: number
+        }
+        Insert: {
+          completed_count?: number
+          document_id?: string | null
+          id?: string
+          revisit_count?: number
+          updated_at?: string
+          user_id: string
+          viewed_count?: number
+        }
+        Update: {
+          completed_count?: number
+          document_id?: string | null
+          id?: string
+          revisit_count?: number
+          updated_at?: string
+          user_id?: string
+          viewed_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flashcard_stats_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       flashcards: {
         Row: {
           back: string
@@ -125,6 +163,44 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "flashcards_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mcq_stats: {
+        Row: {
+          correct_answers: number
+          document_id: string | null
+          id: string
+          incorrect_answers: number
+          total_attempts: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          correct_answers?: number
+          document_id?: string | null
+          id?: string
+          incorrect_answers?: number
+          total_attempts?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          correct_answers?: number
+          document_id?: string | null
+          id?: string
+          incorrect_answers?: number
+          total_attempts?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mcq_stats_document_id_fkey"
             columns: ["document_id"]
             isOneToOne: false
             referencedRelation: "documents"
@@ -302,12 +378,114 @@ export type Database = {
           },
         ]
       }
+      user_activity_log: {
+        Row: {
+          action_type: string
+          created_at: string
+          document_id: string | null
+          id: string
+          metadata: Json | null
+          user_id: string
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          document_id?: string | null
+          id?: string
+          metadata?: Json | null
+          user_id: string
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          document_id?: string | null
+          id?: string
+          metadata?: Json | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_activity_log_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_progress: {
+        Row: {
+          current_level: string
+          id: string
+          topics_completed: number
+          total_flashcards_completed: number
+          total_flashcards_viewed: number
+          total_mcq_attempted: number
+          total_mcq_correct: number
+          total_time_spent_seconds: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          current_level?: string
+          id?: string
+          topics_completed?: number
+          total_flashcards_completed?: number
+          total_flashcards_viewed?: number
+          total_mcq_attempted?: number
+          total_mcq_correct?: number
+          total_time_spent_seconds?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          current_level?: string
+          id?: string
+          topics_completed?: number
+          total_flashcards_completed?: number
+          total_flashcards_viewed?: number
+          total_mcq_attempted?: number
+          total_mcq_correct?: number
+          total_time_spent_seconds?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_streak: {
+        Row: {
+          current_streak: number
+          id: string
+          last_active_date: string | null
+          longest_streak: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          current_streak?: number
+          id?: string
+          last_active_date?: string | null
+          longest_streak?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          current_streak?: number
+          id?: string
+          last_active_date?: string | null
+          longest_streak?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      update_user_level: { Args: { p_user_id: string }; Returns: string }
+      update_user_streak: { Args: { p_user_id: string }; Returns: Json }
     }
     Enums: {
       [_ in never]: never
