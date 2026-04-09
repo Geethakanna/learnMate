@@ -164,9 +164,10 @@ export function QuizViewer({ documentId, userId }: QuizViewerProps) {
         answers: [...answers, parseInt(selectedAnswer || "0")],
       });
 
-      // Track MCQ stats and activity
+      // Track MCQ stats and activity, then recompute level
       if (selectedQuiz?.document_id) {
         await updateMcqStats(selectedQuiz.document_id, questions.length, correctCount);
+        await refreshLevel();
       }
       logActivity('quiz_completed', selectedQuiz?.document_id || undefined, {
         quiz_id: selectedQuiz!.id,
