@@ -359,5 +359,6 @@ export default function DocumentUpload({ onSuccess, onCancel }: DocumentUploadPr
         </Tabs>
       </CardContent>
     </Card>
+    </>
   );
 }
