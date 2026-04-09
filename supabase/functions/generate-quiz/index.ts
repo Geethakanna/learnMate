@@ -111,7 +111,16 @@ serve(async (req) => {
 
     console.log(`Using ${isOpenRouter ? 'OpenRouter' : 'OpenAI'} API with model: ${model}`);
 
-    const prompt = `Based on the following document content, generate exactly ${questionCount} multiple-choice quiz questions to test understanding.
+    const levelInstructions = effectiveLevel === "Beginner"
+      ? "Create EASY questions that test basic recall and definitions. Use simple, clear language. Include obvious distractors."
+      : effectiveLevel === "Intermediate"
+      ? "Create MODERATE questions that test understanding of concepts and their relationships. Include plausible distractors."
+      : "Create HARD questions that test deep understanding, edge cases, and ability to apply concepts. Use subtle distractors that require careful reasoning.";
+
+    const prompt = `Based on the following document content, generate exactly ${questionCount} multiple-choice quiz questions.
+
+Difficulty level: ${effectiveLevel}
+${levelInstructions}
 
 For each question, provide:
 1. A clear question
