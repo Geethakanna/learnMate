@@ -46,7 +46,7 @@ serve(async (req) => {
     }
 
     const userId = claimsData.claims.sub;
-    const { question, documentId } = await req.json();
+    const { question, documentId, userLevel } = await req.json();
 
     if (!question || !documentId) {
       return new Response(JSON.stringify({ error: "Missing question or documentId" }), {
@@ -54,6 +54,20 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // Resolve effective level
+    let effectiveLevel = userLevel || "Beginner";
+    try {
+      const { data: levelData } = await supabase
+        .from("document_user_levels")
+        .select("actual_level")
+        .eq("user_id", userId)
+        .eq("document_id", documentId)
+        .maybeSingle();
+      if (levelData?.actual_level) effectiveLevel = levelData.actual_level;
+    } catch {}
+
+    console.log(`Effective level for response: ${effectiveLevel}`);
 
     console.log(`Processing question for document ${documentId}: ${question}`);
 
@@ -149,18 +163,34 @@ serve(async (req) => {
             role: "system",
             content: `You are Learn Mate, an expert AI study assistant designed to help students learn effectively from their documents.
 
-Your role is to provide comprehensive, educational answers that:
+The user's current learning level is: ${effectiveLevel}.
+
+${effectiveLevel === "Beginner" ? `ADAPTATION FOR BEGINNER:
+- Provide very detailed, step-by-step explanations
+- Use simple language and avoid jargon (or define it when used)
+- Include concrete examples and analogies
+- Add extra learning hints and "Did you know?" tips
+- Break complex topics into small, digestible parts` : ""}
+${effectiveLevel === "Intermediate" ? `ADAPTATION FOR INTERMEDIATE:
+- Provide moderate explanations focusing on concepts and logic
+- Assume basic familiarity with the topic
+- Less hand-holding, more conceptual depth
+- Include connections between related ideas` : ""}
+${effectiveLevel === "Advanced" ? `ADAPTATION FOR ADVANCED:
+- Be concise and direct
+- Focus on depth, nuance, and edge cases
+- Skip basic explanations
+- Highlight subtle distinctions and advanced implications
+- Reference theoretical frameworks when relevant` : ""}
+
+Your role is to provide educational answers that:
 1. **Directly answer the question** using ONLY information from the provided document context
-2. **Explain concepts thoroughly** - break down complex topics into understandable parts
-3. **Provide examples** when relevant to illustrate points
-4. **Use clear structure** - use headings, bullet points, and numbered lists for clarity
-5. **Cite your sources** - reference which parts of the document support your answer
+2. **Cite your sources** - reference which parts of the document support your answer
 
 IMPORTANT RULES:
 - Base your answers STRICTLY on the document content provided
-- If the information is not in the document, clearly state: "I couldn't find this specific information in your document. The document covers [related topics you did find]."
+- If the information is not in the document, clearly state: "I couldn't find this specific information in your document."
 - Never make up or assume information not present in the context
-- Be thorough but focused - provide detail relevant to the question
 - Use markdown formatting for better readability`,
           },
           {

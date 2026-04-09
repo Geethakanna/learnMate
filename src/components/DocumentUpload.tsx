@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { Upload, Link, FileText, X, Loader2 } from 'lucide-react';
+import LevelSelectionDialog, { type LearningLevel } from '@/components/LevelSelectionDialog';
 
 interface DocumentUploadProps {
   onSuccess: () => void;
@@ -20,6 +21,8 @@ export default function DocumentUpload({ onSuccess, onCancel }: DocumentUploadPr
   const [file, setFile] = useState<File | null>(null);
   const [url, setUrl] = useState('');
   const [dragActive, setDragActive] = useState(false);
+  const [pendingDocId, setPendingDocId] = useState<string | null>(null);
+  const [showLevelDialog, setShowLevelDialog] = useState(false);
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -101,11 +104,30 @@ export default function DocumentUpload({ onSuccess, onCancel }: DocumentUploadPr
         .update({ chunk_count: chunks.length })
         .eq('id', doc.id);
 
-      onSuccess();
+      // Show level selection dialog before completing
+      setPendingDocId(doc.id);
+      setShowLevelDialog(true);
     } catch (error) {
       console.error('Error processing document:', error);
       throw error;
     }
+  };
+
+  const handleLevelSelected = async (level: LearningLevel) => {
+    if (!user || !pendingDocId) return;
+    try {
+      await supabase.from('document_user_levels').insert({
+        user_id: user.id,
+        document_id: pendingDocId,
+        initial_level: level,
+        actual_level: level,
+      });
+    } catch (e) {
+      console.error('Error saving level:', e);
+    }
+    setShowLevelDialog(false);
+    setPendingDocId(null);
+    onSuccess();
   };
 
   const chunkContent = (content: string): { text: string; page: number }[] => {
@@ -204,6 +226,8 @@ export default function DocumentUpload({ onSuccess, onCancel }: DocumentUploadPr
   };
 
   return (
+    <>
+    <LevelSelectionDialog open={showLevelDialog} onSelect={handleLevelSelected} />
     <Card className="max-w-2xl mx-auto shadow-card">
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
@@ -335,5 +359,6 @@ export default function DocumentUpload({ onSuccess, onCancel }: DocumentUploadPr
         </Tabs>
       </CardContent>
     </Card>
+    </>
   );
 }

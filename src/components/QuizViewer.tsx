@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, XCircle, ArrowRight, RotateCcw, Trophy, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { logActivity, updateMcqStats } from "@/lib/tracking";
+import { useDocumentLevel } from "@/hooks/useDocumentLevel";
 
 interface QuizQuestion {
   id: string;
@@ -31,6 +32,7 @@ interface QuizViewerProps {
 }
 
 export function QuizViewer({ documentId, userId }: QuizViewerProps) {
+  const { effectiveLevel, refreshLevel } = useDocumentLevel(documentId);
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [selectedQuiz, setSelectedQuiz] = useState<Quiz | null>(null);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
@@ -162,9 +164,10 @@ export function QuizViewer({ documentId, userId }: QuizViewerProps) {
         answers: [...answers, parseInt(selectedAnswer || "0")],
       });
 
-      // Track MCQ stats and activity
+      // Track MCQ stats and activity, then recompute level
       if (selectedQuiz?.document_id) {
         await updateMcqStats(selectedQuiz.document_id, questions.length, correctCount);
+        await refreshLevel();
       }
       logActivity('quiz_completed', selectedQuiz?.document_id || undefined, {
         quiz_id: selectedQuiz!.id,
@@ -340,8 +343,15 @@ export function QuizViewer({ documentId, userId }: QuizViewerProps) {
     <div className="w-full max-w-2xl mx-auto space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Quiz Generator</CardTitle>
-          <CardDescription>Test your knowledge with AI-generated quizzes</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Quiz Generator</CardTitle>
+              <CardDescription>Test your knowledge with AI-generated quizzes</CardDescription>
+            </div>
+            <Badge variant="outline" className="text-xs">
+              Level: {effectiveLevel}
+            </Badge>
+          </div>
         </CardHeader>
         <CardContent>
           <Button onClick={generateQuiz} disabled={isGenerating} className="w-full">
