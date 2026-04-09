@@ -46,7 +46,7 @@ serve(async (req) => {
     }
 
     const userId = claimsData.claims.sub;
-    const { documentId, count = 10 } = await req.json();
+    const { documentId, count = 10, userLevel } = await req.json();
 
     if (!documentId) {
       return new Response(JSON.stringify({ error: "Missing documentId" }), {
@@ -55,7 +55,19 @@ serve(async (req) => {
       });
     }
 
-    console.log(`Generating ${count} flashcards for document ${documentId}`);
+    // Resolve effective level
+    let effectiveLevel = userLevel || "Beginner";
+    try {
+      const { data: levelData } = await supabase
+        .from("document_user_levels")
+        .select("actual_level")
+        .eq("user_id", userId)
+        .eq("document_id", documentId)
+        .maybeSingle();
+      if (levelData?.actual_level) effectiveLevel = levelData.actual_level;
+    } catch {}
+
+    console.log(`Generating ${count} flashcards at ${effectiveLevel} level for document ${documentId}`);
 
     // Fetch document chunks
     const { data: chunks, error: chunksError } = await supabase
@@ -112,11 +124,29 @@ serve(async (req) => {
             role: "system",
             content: `You are an expert educator creating flashcards for effective studying. Generate exactly ${count} high-quality flashcards from the provided document content.
 
+The student's level is: ${effectiveLevel}.
+
+${effectiveLevel === "Beginner" ? `FOR BEGINNER:
+- Focus on basic definitions, key terms, and fundamental concepts
+- Use simple language on the front
+- Provide detailed, explanatory answers on the back
+- Mark most cards as "easy" or "medium" difficulty
+- Include memory aids and mnemonics when helpful` : ""}
+${effectiveLevel === "Intermediate" ? `FOR INTERMEDIATE:
+- Focus on conceptual understanding and relationships between ideas
+- Questions should require synthesis, not just recall
+- Balanced mix of "medium" and "hard" difficulty` : ""}
+${effectiveLevel === "Advanced" ? `FOR ADVANCED:
+- Focus on edge cases, nuances, and deep implications
+- Questions should challenge assumptions and require critical thinking
+- Most cards should be "hard" difficulty
+- Include application and analysis questions` : ""}
+
 Each flashcard should:
 1. Test a key concept, definition, or important fact
 2. Have a clear, concise question on the front
 3. Have a comprehensive but focused answer on the back
-4. Vary in difficulty (easy, medium, hard)
+4. Have appropriate difficulty (easy, medium, hard)
 
 Return your response as a valid JSON array with this exact structure:
 [

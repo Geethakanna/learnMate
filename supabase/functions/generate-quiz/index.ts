@@ -48,7 +48,7 @@ serve(async (req) => {
     }
     const userId = claimsData.claims.sub;
 
-    const { documentId, questionCount = 10 } = await req.json();
+    const { documentId, questionCount = 10, userLevel } = await req.json();
     
     if (!documentId) {
       return new Response(
@@ -57,7 +57,19 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Generating ${questionCount} quiz questions for document ${documentId}`);
+    // Resolve effective level
+    let effectiveLevel = userLevel || "Beginner";
+    try {
+      const { data: levelData } = await supabase
+        .from("document_user_levels")
+        .select("actual_level")
+        .eq("user_id", userId)
+        .eq("document_id", documentId)
+        .maybeSingle();
+      if (levelData?.actual_level) effectiveLevel = levelData.actual_level;
+    } catch {}
+
+    console.log(`Generating quiz at ${effectiveLevel} level for document ${documentId}`);
 
     // Get document info — RLS enforced, user can only access own documents
     const { data: document, error: docError } = await supabase
