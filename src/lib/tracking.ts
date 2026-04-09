@@ -1,5 +1,33 @@
 import { supabase } from "@/integrations/supabase/client";
 
+// Session timer state (module-level, not persisted)
+let sessionStartTime: number | null = null;
+let sessionView: string | null = null;
+
+// Start tracking time for a view
+export function startSessionTimer(view: string) {
+  // End previous session if any
+  endSessionTimer();
+  sessionStartTime = Date.now();
+  sessionView = view;
+}
+
+// End current session and log elapsed time
+export async function endSessionTimer() {
+  if (sessionStartTime && sessionView) {
+    const elapsed = Math.floor((Date.now() - sessionStartTime) / 1000);
+    if (elapsed > 2) {
+      // Only log if > 2 seconds to avoid noise
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await updateProgress(user.id, { time_seconds: elapsed });
+      }
+    }
+  }
+  sessionStartTime = null;
+  sessionView = null;
+}
+
 // Log an activity event
 export async function logActivity(
   actionType: string,
@@ -20,7 +48,7 @@ export async function logActivity(
   await supabase.rpc('update_user_streak', { p_user_id: user.id } as any);
 }
 
-// Update MCQ stats after a quiz attempt
+// Update MCQ stats after a quiz attempt (uses upsert to avoid race conditions)
 export async function updateMcqStats(
   documentId: string,
   attempted: number,
@@ -29,7 +57,7 @@ export async function updateMcqStats(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 
-  // Upsert mcq_stats for this document
+  // Fetch existing to calculate new totals
   const { data: existing } = await supabase
     .from('mcq_stats' as any)
     .select('*')
@@ -37,32 +65,36 @@ export async function updateMcqStats(
     .eq('document_id', documentId)
     .maybeSingle();
 
-  if (existing) {
+  const prev = existing as any;
+  const newRow = {
+    user_id: user.id,
+    document_id: documentId,
+    total_attempts: (prev?.total_attempts || 0) + attempted,
+    correct_answers: (prev?.correct_answers || 0) + correct,
+    incorrect_answers: (prev?.incorrect_answers || 0) + (attempted - correct),
+    updated_at: new Date().toISOString(),
+  };
+
+  if (prev) {
     await supabase
       .from('mcq_stats' as any)
       .update({
-        total_attempts: (existing as any).total_attempts + attempted,
-        correct_answers: (existing as any).correct_answers + correct,
-        incorrect_answers: (existing as any).incorrect_answers + (attempted - correct),
-        updated_at: new Date().toISOString(),
+        total_attempts: newRow.total_attempts,
+        correct_answers: newRow.correct_answers,
+        incorrect_answers: newRow.incorrect_answers,
+        updated_at: newRow.updated_at,
       })
       .eq('user_id', user.id)
       .eq('document_id', documentId);
   } else {
-    await supabase.from('mcq_stats' as any).insert({
-      user_id: user.id,
-      document_id: documentId,
-      total_attempts: attempted,
-      correct_answers: correct,
-      incorrect_answers: attempted - correct,
-    });
+    await supabase.from('mcq_stats' as any).insert(newRow);
   }
 
   // Update aggregate progress
   await updateProgress(user.id, { mcq_attempted: attempted, mcq_correct: correct });
 }
 
-// Update flashcard stats
+// Update flashcard stats (uses upsert to avoid race conditions)
 export async function updateFlashcardStats(
   documentId: string,
   action: 'view' | 'complete' | 'revisit'
@@ -77,16 +109,13 @@ export async function updateFlashcardStats(
     .eq('document_id', documentId)
     .maybeSingle();
 
-  const increments: Record<string, number> = {};
-  if (action === 'view') increments.viewed_count = 1;
-  if (action === 'complete') increments.completed_count = 1;
-  if (action === 'revisit') increments.revisit_count = 1;
+  const prev = existing as any;
 
-  if (existing) {
+  if (prev) {
     const updates: Record<string, any> = { updated_at: new Date().toISOString() };
-    if (action === 'view') updates.viewed_count = (existing as any).viewed_count + 1;
-    if (action === 'complete') updates.completed_count = (existing as any).completed_count + 1;
-    if (action === 'revisit') updates.revisit_count = (existing as any).revisit_count + 1;
+    if (action === 'view') updates.viewed_count = prev.viewed_count + 1;
+    if (action === 'complete') updates.completed_count = prev.completed_count + 1;
+    if (action === 'revisit') updates.revisit_count = prev.revisit_count + 1;
 
     await supabase
       .from('flashcard_stats' as any)
@@ -151,17 +180,26 @@ async function updateProgress(
     });
   }
 
-  // Recalculate topics_completed (count of distinct documents with quiz attempts)
-  const { count } = await supabase
+  // Recalculate topics_completed (count of DISTINCT documents with quiz attempts)
+  const { data: distinctDocs } = await supabase
     .from('quiz_attempts')
-    .select('quiz_id', { count: 'exact', head: true })
-    .eq('user_id', userId);
+    .select('quiz_id');
 
-  if (count !== null) {
-    await supabase
-      .from('user_progress' as any)
-      .update({ topics_completed: count })
-      .eq('user_id', userId);
+  // We need to get document_ids from quizzes for these attempts
+  if (distinctDocs && distinctDocs.length > 0) {
+    const quizIds = [...new Set(distinctDocs.map((r: any) => r.quiz_id))];
+    const { data: quizzes } = await supabase
+      .from('quizzes')
+      .select('document_id')
+      .in('id', quizIds);
+
+    if (quizzes) {
+      const uniqueDocIds = new Set(quizzes.map((q: any) => q.document_id).filter(Boolean));
+      await supabase
+        .from('user_progress' as any)
+        .update({ topics_completed: uniqueDocIds.size })
+        .eq('user_id', userId);
+    }
   }
 
   // Recalculate level
@@ -201,12 +239,10 @@ export async function generateReport() {
   const flashcardStatsData = ((flashcardRes.data as any[]) || []);
   const recentActivity = ((activityRes.data as any[]) || []);
 
-  // Calculate accuracy
   const accuracy = progress.total_mcq_attempted > 0
     ? Math.round((progress.total_mcq_correct / progress.total_mcq_attempted) * 100)
     : 0;
 
-  // Find weak areas: documents where accuracy < 50%
   const weakAreas = mcqStats
     .filter((s: any) => s.total_attempts > 0 && (s.correct_answers / s.total_attempts) < 0.5)
     .map((s: any) => ({

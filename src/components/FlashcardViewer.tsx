@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -35,10 +35,21 @@ export function FlashcardViewer({ documentId, documentTitle }: FlashcardViewerPr
   const [isGenerating, setIsGenerating] = useState(false);
   const [cardCount, setCardCount] = useState(10);
   const { toast } = useToast();
+  const viewedCards = useRef(new Set<number>());
 
   useEffect(() => {
     fetchFlashcards();
+    viewedCards.current = new Set();
   }, [documentId]);
+
+  // Log initial view once per document session
+  useEffect(() => {
+    if (flashcards.length > 0) {
+      updateFlashcardStats(documentId, 'view');
+      logActivity('flashcard_viewed', documentId);
+      viewedCards.current.add(0);
+    }
+  }, [flashcards.length, documentId]);
 
   const fetchFlashcards = async () => {
     setIsLoading(true);
@@ -128,15 +139,22 @@ export function FlashcardViewer({ documentId, documentTitle }: FlashcardViewerPr
 
   const nextCard = () => {
     setIsFlipped(false);
-    setCurrentIndex((prev) => (prev + 1) % flashcards.length);
-    updateFlashcardStats(documentId, 'view');
-    logActivity('flashcard_viewed', documentId);
+    const nextIdx = (currentIndex + 1) % flashcards.length;
+    setCurrentIndex(nextIdx);
+    // Only track if this card hasn't been viewed in this session
+    if (!viewedCards.current.has(nextIdx)) {
+      viewedCards.current.add(nextIdx);
+    }
+    // Check if user completed all cards
+    if (viewedCards.current.size === flashcards.length) {
+      updateFlashcardStats(documentId, 'complete');
+      logActivity('flashcard_completed', documentId);
+    }
   };
 
   const prevCard = () => {
     setIsFlipped(false);
     setCurrentIndex((prev) => (prev - 1 + flashcards.length) % flashcards.length);
-    updateFlashcardStats(documentId, 'revisit');
   };
 
   const getDifficultyColor = (difficulty: string) => {
