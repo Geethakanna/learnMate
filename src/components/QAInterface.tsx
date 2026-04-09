@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDocumentLevel } from '@/hooks/useDocumentLevel';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,6 +39,7 @@ interface QAInterfaceProps {
 
 export default function QAInterface({ documents, selectedDocument, onSelectDocument }: QAInterfaceProps) {
   const { user, session } = useAuth();
+  const { effectiveLevel } = useDocumentLevel(selectedDocument?.id || null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -76,6 +78,7 @@ export default function QAInterface({ documents, selectedDocument, onSelectDocum
         body: JSON.stringify({
           question,
           documentId: selectedDocument.id,
+          userLevel: effectiveLevel,
         }),
       });
 

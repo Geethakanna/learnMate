@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, XCircle, ArrowRight, RotateCcw, Trophy, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { logActivity, updateMcqStats } from "@/lib/tracking";
+import { useDocumentLevel } from "@/hooks/useDocumentLevel";
 
 interface QuizQuestion {
   id: string;
@@ -31,6 +32,7 @@ interface QuizViewerProps {
 }
 
 export function QuizViewer({ documentId, userId }: QuizViewerProps) {
+  const { effectiveLevel, refreshLevel } = useDocumentLevel(documentId);
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [selectedQuiz, setSelectedQuiz] = useState<Quiz | null>(null);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
