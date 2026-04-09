@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { Upload, Link, FileText, X, Loader2 } from 'lucide-react';
+import LevelSelectionDialog, { type LearningLevel } from '@/components/LevelSelectionDialog';
 
 interface DocumentUploadProps {
   onSuccess: () => void;
@@ -20,6 +21,8 @@ export default function DocumentUpload({ onSuccess, onCancel }: DocumentUploadPr
   const [file, setFile] = useState<File | null>(null);
   const [url, setUrl] = useState('');
   const [dragActive, setDragActive] = useState(false);
+  const [pendingDocId, setPendingDocId] = useState<string | null>(null);
+  const [showLevelDialog, setShowLevelDialog] = useState(false);
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault();
