@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { toast } from 'sonner';
 import { 
   Sparkles, 
@@ -16,7 +17,8 @@ import {
   Brain,
   Layers,
   HelpCircle,
-  BarChart3
+  BarChart3,
+  Menu
 } from 'lucide-react';
 import DocumentUpload from '@/components/DocumentUpload';
 import DocumentList from '@/components/DocumentList';
@@ -24,7 +26,7 @@ import QAInterface from '@/components/QAInterface';
 import { FlashcardViewer } from '@/components/FlashcardViewer';
 import { QuizViewer } from '@/components/QuizViewer';
 import { ProgressReport } from '@/components/ProgressReport';
-import { logActivity } from '@/lib/tracking';
+import { logActivity, startSessionTimer, endSessionTimer } from '@/lib/tracking';
 
 interface Document {
   id: string;
@@ -34,14 +36,25 @@ interface Document {
   created_at: string;
 }
 
+type ViewType = 'documents' | 'qa' | 'flashcards' | 'quiz' | 'progress';
+
+const NAV_ITEMS: { view: ViewType; label: string; icon: React.ElementType }[] = [
+  { view: 'documents', label: 'Documents', icon: FileText },
+  { view: 'qa', label: 'Ask AI', icon: MessageSquare },
+  { view: 'flashcards', label: 'Flashcards', icon: Layers },
+  { view: 'quiz', label: 'Quizzes', icon: HelpCircle },
+  { view: 'progress', label: 'Progress', icon: BarChart3 },
+];
+
 export default function Dashboard() {
   const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
   const [showUpload, setShowUpload] = useState(false);
-  const [view, setView] = useState<'documents' | 'qa' | 'flashcards' | 'quiz' | 'progress'>('documents');
+  const [view, setView] = useState<ViewType>('documents');
   const [loadingDocs, setLoadingDocs] = useState(true);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -55,6 +68,24 @@ export default function Dashboard() {
       logActivity('login');
     }
   }, [user]);
+
+  // Session duration tracking
+  useEffect(() => {
+    startSessionTimer(view);
+    // Flush on tab close / hide
+    const handleVisChange = () => {
+      if (document.visibilityState === 'hidden') endSessionTimer();
+      if (document.visibilityState === 'visible') startSessionTimer(view);
+    };
+    const handleBeforeUnload = () => endSessionTimer();
+    window.addEventListener('visibilitychange', handleVisChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      endSessionTimer();
+      window.removeEventListener('visibilitychange', handleVisChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [view]);
 
   const fetchDocuments = async () => {
     try {
@@ -74,6 +105,7 @@ export default function Dashboard() {
   };
 
   const handleSignOut = async () => {
+    await endSessionTimer();
     await signOut();
     navigate('/');
   };
@@ -89,6 +121,11 @@ export default function Dashboard() {
     setView('qa');
   };
 
+  const switchView = (v: ViewType) => {
+    setView(v);
+    setMobileNavOpen(false);
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -102,12 +139,51 @@ export default function Dashboard() {
 
   if (!user) return null;
 
+  const NavButtons = ({ onClick }: { onClick?: () => void }) => (
+    <>
+      {NAV_ITEMS.map(({ view: v, label, icon: Icon }) => (
+        <button
+          key={v}
+          onClick={() => { switchView(v); onClick?.(); }}
+          className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors w-full text-left ${
+            view === v
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Icon className="w-4 h-4" />
+          {label}
+        </button>
+      ))}
+    </>
+  );
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-xl">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
+            {/* Mobile hamburger */}
+            <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon" className="md:hidden">
+                  <Menu className="w-5 h-5" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-64 p-4">
+                <div className="flex items-center gap-2 mb-6">
+                  <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+                    <Sparkles className="w-4 h-4 text-primary-foreground" />
+                  </div>
+                  <span className="text-lg font-bold">Learn Mate</span>
+                </div>
+                <nav className="flex flex-col gap-1">
+                  <NavButtons />
+                </nav>
+              </SheetContent>
+            </Sheet>
+
             <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center">
               <Sparkles className="w-5 h-5 text-primary-foreground" />
             </div>
@@ -116,61 +192,7 @@ export default function Dashboard() {
 
           <div className="flex items-center gap-4">
             <nav className="hidden md:flex items-center gap-1 bg-muted rounded-lg p-1">
-              <button
-                onClick={() => setView('documents')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  view === 'documents'
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <FileText className="w-4 h-4 inline mr-2" />
-                Documents
-              </button>
-              <button
-                onClick={() => setView('qa')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  view === 'qa'
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <MessageSquare className="w-4 h-4 inline mr-2" />
-                Ask AI
-              </button>
-              <button
-                onClick={() => setView('flashcards')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  view === 'flashcards'
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <Layers className="w-4 h-4 inline mr-2" />
-                Flashcards
-              </button>
-              <button
-                onClick={() => setView('quiz')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  view === 'quiz'
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <HelpCircle className="w-4 h-4 inline mr-2" />
-                Quizzes
-              </button>
-              <button
-                onClick={() => setView('progress')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  view === 'progress'
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <BarChart3 className="w-4 h-4 inline mr-2" />
-                Progress
-              </button>
+              <NavButtons />
             </nav>
 
             <Button variant="ghost" size="icon" onClick={handleSignOut}>
@@ -184,7 +206,6 @@ export default function Dashboard() {
       <main className="container mx-auto px-4 py-8">
         {view === 'documents' && (
           <div className="animate-fade-in">
-            {/* Welcome Section */}
             {documents.length === 0 && !showUpload && (
               <div className="text-center py-16">
                 <div className="w-20 h-20 rounded-2xl bg-accent/10 flex items-center justify-center mx-auto mb-6">
@@ -207,7 +228,6 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* Upload Modal */}
             {showUpload && (
               <div className="mb-8">
                 <DocumentUpload 
@@ -217,7 +237,6 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* Documents List */}
             {documents.length > 0 && !showUpload && (
               <div>
                 <div className="flex items-center justify-between mb-6">
@@ -285,7 +304,6 @@ export default function Dashboard() {
               </Card>
             ) : (
               <div className="space-y-6">
-                {/* Document selector */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">

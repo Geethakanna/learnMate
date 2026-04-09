@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Trophy, Flame, Target, BookOpen, Brain, TrendingUp, AlertTriangle, RefreshCw } from "lucide-react";
 import { generateReport } from "@/lib/tracking";
 import { supabase } from "@/integrations/supabase/client";
+import { QuizHistory } from "@/components/QuizHistory";
 
 interface ReportData {
   current_level: string;
