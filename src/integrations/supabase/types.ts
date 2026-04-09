@@ -55,6 +55,44 @@ export type Database = {
           },
         ]
       }
+      document_user_levels: {
+        Row: {
+          actual_level: string
+          created_at: string
+          document_id: string
+          id: string
+          initial_level: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          actual_level?: string
+          created_at?: string
+          document_id: string
+          id?: string
+          initial_level?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          actual_level?: string
+          created_at?: string
+          document_id?: string
+          id?: string
+          initial_level?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_user_levels_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       documents: {
         Row: {
           chunk_count: number | null
@@ -484,6 +522,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      compute_actual_level: {
+        Args: { p_document_id: string; p_user_id: string }
+        Returns: string
+      }
       update_user_level: { Args: { p_user_id: string }; Returns: string }
       update_user_streak: { Args: { p_user_id: string }; Returns: Json }
     }
