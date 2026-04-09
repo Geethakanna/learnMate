@@ -343,8 +343,15 @@ export function QuizViewer({ documentId, userId }: QuizViewerProps) {
     <div className="w-full max-w-2xl mx-auto space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Quiz Generator</CardTitle>
-          <CardDescription>Test your knowledge with AI-generated quizzes</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Quiz Generator</CardTitle>
+              <CardDescription>Test your knowledge with AI-generated quizzes</CardDescription>
+            </div>
+            <Badge variant="outline" className="text-xs">
+              Level: {effectiveLevel}
+            </Badge>
+          </div>
         </CardHeader>
         <CardContent>
           <Button onClick={generateQuiz} disabled={isGenerating} className="w-full">
