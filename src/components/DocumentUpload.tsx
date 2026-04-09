@@ -104,11 +104,30 @@ export default function DocumentUpload({ onSuccess, onCancel }: DocumentUploadPr
         .update({ chunk_count: chunks.length })
         .eq('id', doc.id);
 
-      onSuccess();
+      // Show level selection dialog before completing
+      setPendingDocId(doc.id);
+      setShowLevelDialog(true);
     } catch (error) {
       console.error('Error processing document:', error);
       throw error;
     }
+  };
+
+  const handleLevelSelected = async (level: LearningLevel) => {
+    if (!user || !pendingDocId) return;
+    try {
+      await supabase.from('document_user_levels').insert({
+        user_id: user.id,
+        document_id: pendingDocId,
+        initial_level: level,
+        actual_level: level,
+      });
+    } catch (e) {
+      console.error('Error saving level:', e);
+    }
+    setShowLevelDialog(false);
+    setPendingDocId(null);
+    onSuccess();
   };
 
   const chunkContent = (content: string): { text: string; page: number }[] => {
