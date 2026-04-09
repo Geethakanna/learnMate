@@ -226,6 +226,8 @@ export default function DocumentUpload({ onSuccess, onCancel }: DocumentUploadPr
   };
 
   return (
+    <>
+    <LevelSelectionDialog open={showLevelDialog} onSelect={handleLevelSelected} />
     <Card className="max-w-2xl mx-auto shadow-card">
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
