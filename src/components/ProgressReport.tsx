@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, Trophy, Flame, Target, BookOpen, TrendingUp, AlertTriangle, RefreshCw } from "lucide-react";
+import { Loader2, Flame, Target, BookOpen, TrendingUp, AlertTriangle, RefreshCw } from "lucide-react";
 import { generateReport } from "@/lib/tracking";
 import { supabase } from "@/integrations/supabase/client";
 import { QuizHistory } from "@/components/QuizHistory";
@@ -78,13 +78,6 @@ export function ProgressReport() {
     return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
   };
 
-  const levelColor = (level: string) => {
-    switch (level) {
-      case 'Advanced': return 'text-green-500';
-      case 'Intermediate': return 'text-yellow-500';
-      default: return 'text-blue-500';
-    }
-  };
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -101,42 +94,21 @@ export function ProgressReport() {
       </div>
 
       {/* Level & Streak */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Trophy className="w-4 h-4" />
-              Current Level
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className={`text-3xl font-bold ${levelColor(report.current_level)}`}>
-              {report.current_level}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {report.current_level === 'Beginner' && 'Reach 60% accuracy & 5 topics for Intermediate'}
-              {report.current_level === 'Intermediate' && 'Reach 80% accuracy & 15 topics for Advanced'}
-              {report.current_level === 'Advanced' && 'You\'ve mastered the content!'}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Flame className="w-4 h-4 text-orange-500" />
-              Streak
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">{report.streak.current} <span className="text-lg font-normal text-muted-foreground">days</span></p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Longest: {report.streak.longest} days
-              {report.streak.last_active && ` · Last active: ${new Date(report.streak.last_active).toLocaleDateString()}`}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <Flame className="w-4 h-4 text-orange-500" />
+            Streak
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-3xl font-bold">{report.streak.current} <span className="text-lg font-normal text-muted-foreground">days</span></p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Longest: {report.streak.longest} days
+            {report.streak.last_active && ` · Last active: ${new Date(report.streak.last_active).toLocaleDateString()}`}
+          </p>
+        </CardContent>
+      </Card>
 
       {/* MCQ Stats */}
       <Card>
