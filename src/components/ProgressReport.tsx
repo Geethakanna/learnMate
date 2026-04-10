@@ -101,42 +101,21 @@ export function ProgressReport() {
       </div>
 
       {/* Level & Streak */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Trophy className="w-4 h-4" />
-              Current Level
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className={`text-3xl font-bold ${levelColor(report.current_level)}`}>
-              {report.current_level}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {report.current_level === 'Beginner' && 'Reach 60% accuracy & 5 topics for Intermediate'}
-              {report.current_level === 'Intermediate' && 'Reach 80% accuracy & 15 topics for Advanced'}
-              {report.current_level === 'Advanced' && 'You\'ve mastered the content!'}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Flame className="w-4 h-4 text-orange-500" />
-              Streak
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">{report.streak.current} <span className="text-lg font-normal text-muted-foreground">days</span></p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Longest: {report.streak.longest} days
-              {report.streak.last_active && ` · Last active: ${new Date(report.streak.last_active).toLocaleDateString()}`}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <Flame className="w-4 h-4 text-orange-500" />
+            Streak
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-3xl font-bold">{report.streak.current} <span className="text-lg font-normal text-muted-foreground">days</span></p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Longest: {report.streak.longest} days
+            {report.streak.last_active && ` · Last active: ${new Date(report.streak.last_active).toLocaleDateString()}`}
+          </p>
+        </CardContent>
+      </Card>
 
       {/* MCQ Stats */}
       <Card>
