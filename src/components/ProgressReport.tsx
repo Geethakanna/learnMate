@@ -78,13 +78,6 @@ export function ProgressReport() {
     return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
   };
 
-  const levelColor = (level: string) => {
-    switch (level) {
-      case 'Advanced': return 'text-green-500';
-      case 'Intermediate': return 'text-yellow-500';
-      default: return 'text-blue-500';
-    }
-  };
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
