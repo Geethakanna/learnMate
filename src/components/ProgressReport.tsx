@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, Trophy, Flame, Target, BookOpen, TrendingUp, AlertTriangle, RefreshCw } from "lucide-react";
+import { Loader2, Flame, Target, BookOpen, TrendingUp, AlertTriangle, RefreshCw } from "lucide-react";
 import { generateReport } from "@/lib/tracking";
 import { supabase } from "@/integrations/supabase/client";
 import { QuizHistory } from "@/components/QuizHistory";
