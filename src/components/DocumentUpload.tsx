@@ -68,14 +68,19 @@ export default function DocumentUpload({ onSuccess, onCancel }: DocumentUploadPr
     }
   };
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleNotesFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
-      const validTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+      const validTypes = [
+        'image/png', 'image/jpeg', 'image/webp', 'image/gif',
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ];
       if (validTypes.includes(selectedFile.type)) {
         setImageFile(selectedFile);
       } else {
-        toast.error('Please upload a PNG, JPG, or WebP image');
+        toast.error('Please upload an image, PDF, or Word document');
       }
     }
   };
@@ -284,8 +289,11 @@ export default function DocumentUpload({ onSuccess, onCancel }: DocumentUploadPr
     setHandwrittenApproving(true);
 
     try {
-      const title = imageFile?.name?.replace(/\.[^.]+$/, '') || 'Handwritten Notes';
-      await processDocument(editedText, title, 'handwritten', handwrittenFilePath);
+      const title = imageFile?.name?.replace(/\.[^.]+$/, '') || 'Notes';
+      const ext = imageFile?.name?.toLowerCase().split('.').pop() || '';
+      const isImage = ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext);
+      const fileTypeLabel = isImage ? 'handwritten' : ext === 'pdf' ? 'pdf-notes' : 'doc-notes';
+      await processDocument(editedText, title, fileTypeLabel, handwrittenFilePath);
       toast.success('Handwritten notes processed successfully');
       resetHandwrittenState();
     } catch (error: any) {
@@ -451,20 +459,20 @@ export default function DocumentUpload({ onSuccess, onCancel }: DocumentUploadPr
               ) : (
                 <>
                   <PenTool className="w-10 h-10 mx-auto mb-4 text-muted-foreground" />
-                  <p className="text-lg font-medium mb-1">Upload Handwritten Notes</p>
+                  <p className="text-lg font-medium mb-1">Upload Notes (Image, PDF, or Document)</p>
                   <p className="text-sm text-muted-foreground mb-4">
-                    PNG, JPG, or WebP — we'll OCR and clean the text for you
+                    We support handwritten and typed notes in multiple formats
                   </p>
                   <Input
                     type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    onChange={handleImageChange}
+                    accept="image/png,image/jpeg,image/webp,.pdf,.doc,.docx"
+                    onChange={handleNotesFileChange}
                     className="hidden"
                     id="image-upload"
                   />
                   <Label htmlFor="image-upload">
                     <Button variant="outline" asChild>
-                      <span>Choose Image</span>
+                      <span>Choose File</span>
                     </Button>
                   </Label>
                 </>
