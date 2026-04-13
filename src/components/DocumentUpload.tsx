@@ -7,8 +7,9 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Upload, Link, FileText, X, Loader2 } from 'lucide-react';
+import { Upload, Link, FileText, X, Loader2, PenTool } from 'lucide-react';
 import LevelSelectionDialog, { type LearningLevel } from '@/components/LevelSelectionDialog';
+import HandwrittenReview, { type HandwrittenResult } from '@/components/HandwrittenReview';
 
 interface DocumentUploadProps {
   onSuccess: () => void;
@@ -19,10 +20,17 @@ export default function DocumentUpload({ onSuccess, onCancel }: DocumentUploadPr
   const { user, session } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [url, setUrl] = useState('');
   const [dragActive, setDragActive] = useState(false);
   const [pendingDocId, setPendingDocId] = useState<string | null>(null);
   const [showLevelDialog, setShowLevelDialog] = useState(false);
+
+  // Handwritten notes pipeline state
+  const [handwrittenResult, setHandwrittenResult] = useState<HandwrittenResult | null>(null);
+  const [handwrittenImageUrl, setHandwrittenImageUrl] = useState<string>('');
+  const [handwrittenFilePath, setHandwrittenFilePath] = useState<string>('');
+  const [handwrittenApproving, setHandwrittenApproving] = useState(false);
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -60,11 +68,22 @@ export default function DocumentUpload({ onSuccess, onCancel }: DocumentUploadPr
     }
   };
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const selectedFile = e.target.files[0];
+      const validTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+      if (validTypes.includes(selectedFile.type)) {
+        setImageFile(selectedFile);
+      } else {
+        toast.error('Please upload a PNG, JPG, or WebP image');
+      }
+    }
+  };
+
   const processDocument = async (content: string, title: string, fileType: string, filePath?: string) => {
     if (!user || !session) return;
 
     try {
-      // Create document record
       const { data: doc, error: docError } = await supabase
         .from('documents')
         .insert({
@@ -72,17 +91,14 @@ export default function DocumentUpload({ onSuccess, onCancel }: DocumentUploadPr
           title,
           file_type: fileType,
           file_path: filePath,
-          content: content.substring(0, 50000), // Store first 50k chars
+          content: content.substring(0, 50000),
         })
         .select()
         .single();
 
       if (docError) throw docError;
 
-      // Chunk the content (simple chunking by paragraphs/sentences)
       const chunks = chunkContent(content);
-      
-      // Insert chunks
       const chunkRecords = chunks.map((chunk, index) => ({
         document_id: doc.id,
         user_id: user.id,
@@ -98,13 +114,11 @@ export default function DocumentUpload({ onSuccess, onCancel }: DocumentUploadPr
 
       if (chunkError) throw chunkError;
 
-      // Update document with chunk count
       await supabase
         .from('documents')
         .update({ chunk_count: chunks.length })
         .eq('id', doc.id);
 
-      // Show level selection dialog before completing
       setPendingDocId(doc.id);
       setShowLevelDialog(true);
     } catch (error) {
@@ -163,7 +177,6 @@ export default function DocumentUpload({ onSuccess, onCancel }: DocumentUploadPr
     setUploading(true);
 
     try {
-      // Upload file to storage
       const filePath = `${user.id}/${Date.now()}_${file.name}`;
       const { error: uploadError } = await supabase.storage
         .from('documents')
@@ -171,7 +184,6 @@ export default function DocumentUpload({ onSuccess, onCancel }: DocumentUploadPr
 
       if (uploadError) throw uploadError;
 
-      // Extract text using edge function
       const { data, error } = await supabase.functions.invoke('extract-pdf', {
         body: { filePath, fileName: file.name }
       });
@@ -202,7 +214,6 @@ export default function DocumentUpload({ onSuccess, onCancel }: DocumentUploadPr
     setUploading(true);
 
     try {
-      // Extract content using edge function
       const { data, error } = await supabase.functions.invoke('extract-url', {
         body: { url }
       });
@@ -225,6 +236,95 @@ export default function DocumentUpload({ onSuccess, onCancel }: DocumentUploadPr
     }
   };
 
+  // ---- Handwritten Notes Pipeline ----
+
+  const handleHandwrittenUpload = async () => {
+    if (!imageFile || !user || !session) return;
+    setUploading(true);
+
+    try {
+      // Upload image to storage
+      const filePath = `${user.id}/${Date.now()}_${imageFile.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from('documents')
+        .upload(filePath, imageFile);
+
+      if (uploadError) throw uploadError;
+
+      // Get a signed URL for the review UI
+      const { data: urlData } = await supabase.storage
+        .from('documents')
+        .createSignedUrl(filePath, 3600);
+
+      // Call the processing edge function
+      const { data, error } = await supabase.functions.invoke('process-handwritten', {
+        body: { filePath, fileName: imageFile.name }
+      });
+
+      if (error) throw error;
+
+      if (!data || !data.clean_text) {
+        throw new Error('Failed to extract text from handwritten notes');
+      }
+
+      // Store results and show review UI
+      setHandwrittenResult(data as HandwrittenResult);
+      setHandwrittenImageUrl(urlData?.signedUrl || '');
+      setHandwrittenFilePath(filePath);
+    } catch (error: any) {
+      console.error('Handwritten upload error:', error);
+      toast.error(error.message || 'Failed to process handwritten notes');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleHandwrittenApprove = async (editedText: string) => {
+    if (!user || !session || !editedText.trim()) return;
+    setHandwrittenApproving(true);
+
+    try {
+      const title = imageFile?.name?.replace(/\.[^.]+$/, '') || 'Handwritten Notes';
+      await processDocument(editedText, title, 'handwritten', handwrittenFilePath);
+      toast.success('Handwritten notes processed successfully');
+      resetHandwrittenState();
+    } catch (error: any) {
+      console.error('Approve error:', error);
+      toast.error(error.message || 'Failed to save notes');
+    } finally {
+      setHandwrittenApproving(false);
+    }
+  };
+
+  const handleHandwrittenReject = () => {
+    resetHandwrittenState();
+    toast.info('Upload cancelled. Please try again with a clearer image.');
+  };
+
+  const resetHandwrittenState = () => {
+    setHandwrittenResult(null);
+    setHandwrittenImageUrl('');
+    setHandwrittenFilePath('');
+    setImageFile(null);
+  };
+
+  // If handwritten review is active, show that instead
+  if (handwrittenResult) {
+    return (
+      <>
+        <LevelSelectionDialog open={showLevelDialog} onSelect={handleLevelSelected} />
+        <HandwrittenReview
+          result={handwrittenResult}
+          imageUrl={handwrittenImageUrl}
+          fileName={imageFile?.name || 'notes'}
+          onApprove={handleHandwrittenApprove}
+          onReject={handleHandwrittenReject}
+          approving={handwrittenApproving}
+        />
+      </>
+    );
+  }
+
   return (
     <>
     <LevelSelectionDialog open={showLevelDialog} onSelect={handleLevelSelected} />
@@ -240,14 +340,18 @@ export default function DocumentUpload({ onSuccess, onCancel }: DocumentUploadPr
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="pdf" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="pdf" className="gap-2">
               <FileText className="w-4 h-4" />
-              PDF File
+              PDF
+            </TabsTrigger>
+            <TabsTrigger value="handwritten" className="gap-2">
+              <PenTool className="w-4 h-4" />
+              Notes
             </TabsTrigger>
             <TabsTrigger value="url" className="gap-2">
               <Link className="w-4 h-4" />
-              Web URL
+              URL
             </TabsTrigger>
           </TabsList>
 
@@ -318,6 +422,69 @@ export default function DocumentUpload({ onSuccess, onCancel }: DocumentUploadPr
                 <>
                   <Upload className="w-4 h-4 mr-2" />
                   Upload & Process
+                </>
+              )}
+            </Button>
+          </TabsContent>
+
+          {/* Handwritten Notes Tab */}
+          <TabsContent value="handwritten" className="mt-6">
+            <div className="border-2 border-dashed rounded-xl p-8 text-center border-border hover:border-muted-foreground/50 transition-colors">
+              {imageFile ? (
+                <div className="flex items-center justify-center gap-3">
+                  <PenTool className="w-8 h-8 text-primary" />
+                  <div className="text-left">
+                    <p className="font-medium">{imageFile.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {(imageFile.size / 1024 / 1024).toFixed(2)} MB
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setImageFile(null)}
+                    className="ml-4"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <PenTool className="w-10 h-10 mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-lg font-medium mb-1">Upload Handwritten Notes</p>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    PNG, JPG, or WebP — we'll OCR and clean the text for you
+                  </p>
+                  <Input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    onChange={handleImageChange}
+                    className="hidden"
+                    id="image-upload"
+                  />
+                  <Label htmlFor="image-upload">
+                    <Button variant="outline" asChild>
+                      <span>Choose Image</span>
+                    </Button>
+                  </Label>
+                </>
+              )}
+            </div>
+
+            <Button
+              className="w-full mt-4"
+              onClick={handleHandwrittenUpload}
+              disabled={!imageFile || uploading}
+            >
+              {uploading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Processing Notes...
+                </>
+              ) : (
+                <>
+                  <PenTool className="w-4 h-4 mr-2" />
+                  Extract & Review
                 </>
               )}
             </Button>
