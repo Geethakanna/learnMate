@@ -456,20 +456,20 @@ export default function DocumentUpload({ onSuccess, onCancel }: DocumentUploadPr
               ) : (
                 <>
                   <PenTool className="w-10 h-10 mx-auto mb-4 text-muted-foreground" />
-                  <p className="text-lg font-medium mb-1">Upload Handwritten Notes</p>
+                  <p className="text-lg font-medium mb-1">Upload Notes (Image, PDF, or Document)</p>
                   <p className="text-sm text-muted-foreground mb-4">
-                    PNG, JPG, or WebP — we'll OCR and clean the text for you
+                    We support handwritten and typed notes in multiple formats
                   </p>
                   <Input
                     type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    onChange={handleImageChange}
+                    accept="image/png,image/jpeg,image/webp,.pdf,.doc,.docx"
+                    onChange={handleNotesFileChange}
                     className="hidden"
                     id="image-upload"
                   />
                   <Label htmlFor="image-upload">
                     <Button variant="outline" asChild>
-                      <span>Choose Image</span>
+                      <span>Choose File</span>
                     </Button>
                   </Label>
                 </>
