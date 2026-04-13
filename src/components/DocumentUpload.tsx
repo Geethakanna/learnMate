@@ -289,8 +289,11 @@ export default function DocumentUpload({ onSuccess, onCancel }: DocumentUploadPr
     setHandwrittenApproving(true);
 
     try {
-      const title = imageFile?.name?.replace(/\.[^.]+$/, '') || 'Handwritten Notes';
-      await processDocument(editedText, title, 'handwritten', handwrittenFilePath);
+      const title = imageFile?.name?.replace(/\.[^.]+$/, '') || 'Notes';
+      const ext = imageFile?.name?.toLowerCase().split('.').pop() || '';
+      const isImage = ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext);
+      const fileTypeLabel = isImage ? 'handwritten' : ext === 'pdf' ? 'pdf-notes' : 'doc-notes';
+      await processDocument(editedText, title, fileTypeLabel, handwrittenFilePath);
       toast.success('Handwritten notes processed successfully');
       resetHandwrittenState();
     } catch (error: any) {
