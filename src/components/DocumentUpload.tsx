@@ -68,14 +68,19 @@ export default function DocumentUpload({ onSuccess, onCancel }: DocumentUploadPr
     }
   };
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleNotesFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
-      const validTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+      const validTypes = [
+        'image/png', 'image/jpeg', 'image/webp', 'image/gif',
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ];
       if (validTypes.includes(selectedFile.type)) {
         setImageFile(selectedFile);
       } else {
-        toast.error('Please upload a PNG, JPG, or WebP image');
+        toast.error('Please upload an image, PDF, or Word document');
       }
     }
   };
