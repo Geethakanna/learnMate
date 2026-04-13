@@ -1,10 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB limit
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -24,15 +27,13 @@ serve(async (req) => {
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
 
-    // Use anon key with user's JWT to enforce RLS/storage policies
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
-    // Validate the user's token
     const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    if (userError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -48,7 +49,6 @@ serve(async (req) => {
       });
     }
 
-    // Download the PDF from storage — RLS enforced via user JWT
     const { data: fileData, error: downloadError } = await supabase.storage
       .from("documents")
       .download(filePath);
@@ -61,11 +61,18 @@ serve(async (req) => {
       });
     }
 
-    // Convert to base64 for AI processing
     const arrayBuffer = await fileData.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
 
-    // Use Gemini to extract text from PDF
+    if (arrayBuffer.byteLength > MAX_FILE_SIZE) {
+      return new Response(JSON.stringify({ error: "File too large. Maximum size is 10MB." }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Use Deno std base64 encoder — memory-safe, no spread operator
+    const base64 = base64Encode(new Uint8Array(arrayBuffer));
+
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
