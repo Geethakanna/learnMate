@@ -55,6 +55,30 @@ serve(async (req) => {
       });
     }
 
+    // Fetch user performance for adaptive intelligence
+    let userPerformance: { accuracy: number; weakAreas: string[]; totalAttempts: number } = {
+      accuracy: 0, weakAreas: [], totalAttempts: 0,
+    };
+    try {
+      const { data: mcqData } = await supabase
+        .from("mcq_stats")
+        .select("total_attempts, correct_answers, document_id")
+        .eq("user_id", userId);
+      if (mcqData && mcqData.length > 0) {
+        const totalAttempts = mcqData.reduce((s: number, r: any) => s + (r.total_attempts || 0), 0);
+        const totalCorrect = mcqData.reduce((s: number, r: any) => s + (r.correct_answers || 0), 0);
+        userPerformance.accuracy = totalAttempts > 0 ? Math.round((totalCorrect / totalAttempts) * 100) : 0;
+        userPerformance.totalAttempts = totalAttempts;
+        // Identify weak documents (accuracy < 50%)
+        const weakDocs = mcqData.filter((r: any) => r.total_attempts >= 3 && (r.correct_answers / r.total_attempts) < 0.5);
+        if (weakDocs.some((r: any) => r.document_id === documentId)) {
+          userPerformance.weakAreas.push("current_document");
+        }
+      }
+    } catch {}
+
+    console.log(`User performance: accuracy=${userPerformance.accuracy}%, attempts=${userPerformance.totalAttempts}, weakAreas=${userPerformance.weakAreas}`);
+
     // Resolve effective level
     let effectiveLevel = userLevel || "Beginner";
     try {
