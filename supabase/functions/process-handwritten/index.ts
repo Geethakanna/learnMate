@@ -7,9 +7,25 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+const MAX_FILE_SIZE = 20 * 1024 * 1024;
 
-function detectFileType(fileName: string): "image" | "pdf" | "doc" {
+type SupportedFileType = "image" | "pdf" | "doc";
+type OcrErrorCode = "RATE_LIMIT" | "NO_TEXT" | "SERVICE_ERROR" | "UNSUPPORTED_OR_CORRUPTED";
+
+type ProcessedResult = {
+  raw_text: string;
+  clean_text: string;
+  confidence_score: number;
+  quality: "clear" | "moderate" | "poor";
+  uncertain_segments?: string[];
+  topics?: string[];
+  key_concepts?: string[];
+  structured_content?: string;
+  file_type?: SupportedFileType;
+  ocr_engine?: string;
+};
+
+function detectFileType(fileName: string): SupportedFileType {
   const ext = fileName.toLowerCase().split(".").pop() || "";
   if (["png", "jpg", "jpeg", "webp", "gif", "heic"].includes(ext)) return "image";
   if (ext === "pdf") return "pdf";
@@ -33,29 +49,80 @@ function getMimeType(fileName: string): string {
   return mimeMap[ext] || "application/octet-stream";
 }
 
-// Call OCR.space API for text extraction
+function normalizeOcrError(message: string): OcrErrorCode {
+  const normalized = message.toLowerCase();
+
+  if (
+    normalized.includes("maximum number of monthly") ||
+    normalized.includes("maximum number of requests") ||
+    normalized.includes("daily limit") ||
+    normalized.includes("too many requests") ||
+    normalized.includes("rate limit")
+  ) {
+    return "RATE_LIMIT";
+  }
+
+  if (
+    normalized.includes("file failed validation") ||
+    normalized.includes("unsupported") ||
+    normalized.includes("corrupted") ||
+    normalized.includes("corrupt") ||
+    normalized.includes("unable to detect")
+  ) {
+    return "UNSUPPORTED_OR_CORRUPTED";
+  }
+
+  if (normalized.includes("no text") || normalized.includes("could not parse") || normalized.includes("empty")) {
+    return "NO_TEXT";
+  }
+
+  return "SERVICE_ERROR";
+}
+
+function createErrorResponse(error: OcrErrorCode) {
+  if (error === "RATE_LIMIT") {
+    return new Response(JSON.stringify({ error: "Daily OCR limit reached. Try again later." }), {
+      status: 429,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  if (error === "NO_TEXT") {
+    return new Response(JSON.stringify({ error: "Text extraction failed. Please upload clearer notes." }), {
+      status: 422,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  if (error === "UNSUPPORTED_OR_CORRUPTED") {
+    return new Response(JSON.stringify({ error: "Unsupported or corrupted file" }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  return new Response(JSON.stringify({ error: "OCR service error. Please retry." }), {
+    status: 502,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 async function extractTextWithOcrSpace(
-  base64Data: string,
-  mimeType: string,
+  fileBlob: Blob,
   fileName: string,
-  apiKey: string
-): Promise<{ text: string; success: boolean; error?: string }> {
+  mimeType: string,
+  apiKey: string,
+): Promise<{ success: true; text: string } | { success: false; error: OcrErrorCode }> {
   try {
+    const uploadBlob = fileBlob.type === mimeType ? fileBlob : fileBlob.slice(0, fileBlob.size, mimeType);
     const formData = new FormData();
-    // Send as base64 string with data URI prefix
-    formData.append("base64Image", `data:${mimeType};base64,${base64Data}`);
+
+    formData.append("file", uploadBlob, fileName);
     formData.append("language", "eng");
     formData.append("isOverlayRequired", "false");
     formData.append("detectOrientation", "true");
     formData.append("scale", "true");
-    formData.append("OCREngine", "2"); // Engine 2 is better for handwriting
-
-    // For PDFs, enable multi-page
-    if (mimeType === "application/pdf") {
-      formData.append("isTable", "true");
-    }
-
-    console.log(`Calling OCR.space API for file: ${fileName}`);
+    formData.append("OCREngine", "2");
 
     const response = await fetch("https://api.ocr.space/parse/image", {
       method: "POST",
@@ -63,42 +130,39 @@ async function extractTextWithOcrSpace(
       body: formData,
     });
 
+    const rawBody = await response.text();
+
     if (!response.ok) {
-      const errText = await response.text();
-      console.error("OCR.space HTTP error:", response.status, errText);
-      if (response.status === 429 || errText.includes("limit")) {
-        return { text: "", success: false, error: "RATE_LIMIT" };
-      }
-      return { text: "", success: false, error: "API_ERROR" };
+      console.error("OCR.space HTTP error:", response.status, rawBody.slice(0, 500));
+      return { success: false, error: normalizeOcrError(rawBody || `HTTP ${response.status}`) };
     }
 
-    const data = await response.json();
+    const data = JSON.parse(rawBody);
+    const errorMessages = [
+      ...(Array.isArray(data.ErrorMessage) ? data.ErrorMessage : []),
+      ...(Array.isArray(data.ErrorDetails) ? data.ErrorDetails : []),
+    ]
+      .filter(Boolean)
+      .join(" ");
 
     if (data.IsErroredOnProcessing) {
-      console.error("OCR.space processing error:", data.ErrorMessage);
-      return { text: "", success: false, error: data.ErrorMessage?.[0] || "API_ERROR" };
+      console.error("OCR.space processing error:", errorMessages || rawBody.slice(0, 500));
+      return { success: false, error: normalizeOcrError(errorMessages || "service error") };
     }
 
-    const parsedResults = data.ParsedResults || [];
-    if (parsedResults.length === 0) {
-      return { text: "", success: false, error: "NO_RESULTS" };
-    }
-
-    // Combine text from all pages/results
-    const fullText = parsedResults
-      .map((r: any) => r.ParsedText || "")
+    const fullText = (data.ParsedResults || [])
+      .map((result: { ParsedText?: string }) => result.ParsedText || "")
       .join("\n\n")
       .trim();
 
     if (!fullText) {
-      return { text: "", success: false, error: "NO_TEXT" };
+      return { success: false, error: "NO_TEXT" };
     }
 
-    console.log(`OCR.space extracted ${fullText.length} chars from ${parsedResults.length} result(s)`);
-    return { text: fullText, success: true };
-  } catch (err) {
-    console.error("OCR.space exception:", err);
-    return { text: "", success: false, error: "API_ERROR" };
+    return { success: true, text: fullText };
+  } catch (error) {
+    console.error("OCR.space exception:", error);
+    return { success: false, error: "SERVICE_ERROR" };
   }
 }
 
@@ -151,6 +215,42 @@ Rules:
 - Do NOT invent content that isn't in the image
 - Preserve the meaning and intent of the original notes`;
 
+async function cleanExtractedText(rawText: string, lovableApiKey: string): Promise<ProcessedResult> {
+  const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${lovableApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      messages: [
+        { role: "system", content: cleaningSystemPrompt },
+        {
+          role: "user",
+          content: `Clean, correct, and structure the following OCR-extracted text. Return ONLY valid JSON.\n\n---\n${rawText}\n---`,
+        },
+      ],
+    }),
+  });
+
+  if (!aiResponse.ok) {
+    const errorText = await aiResponse.text();
+    console.error("AI cleaning error:", errorText);
+    throw new Error("AI_CLEANING_FAILED");
+  }
+
+  const aiData = await aiResponse.json();
+  let content = aiData.choices?.[0]?.message?.content || "";
+  content = content.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+
+  const result = JSON.parse(content) as ProcessedResult;
+  result.raw_text = rawText;
+  result.ocr_engine = "ocr.space";
+
+  return result;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -167,15 +267,19 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
-    const ocrSpaceApiKey = Deno.env.get("OCR_SPACE_API_KEY");
+    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY")!;
+    const ocrSpaceApiKey = Deno.env.get("OCR_SPACE_API_KEY")!;
 
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser(token);
+
     if (userError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
@@ -192,15 +296,13 @@ serve(async (req) => {
       });
     }
 
-    const fileType = detectFileType(fileName || filePath);
-    const mimeType = getMimeType(fileName || filePath);
+    const resolvedFileName = fileName || filePath;
+    const fileType = detectFileType(resolvedFileName);
+    const mimeType = getMimeType(resolvedFileName);
 
-    console.log(`Processing file: ${fileName}, type: ${fileType}, mime: ${mimeType}`);
+    console.log(`Processing file: ${resolvedFileName}, type: ${fileType}, mime: ${mimeType}`);
 
-    // Download file from storage
-    const { data: fileData, error: downloadError } = await supabase.storage
-      .from("documents")
-      .download(filePath);
+    const { data: fileData, error: downloadError } = await supabase.storage.from("documents").download(filePath);
 
     if (downloadError || !fileData) {
       console.error("Download error:", downloadError);
@@ -210,90 +312,26 @@ serve(async (req) => {
       });
     }
 
-    const arrayBuffer = await fileData.arrayBuffer();
-
-    if (arrayBuffer.byteLength > MAX_FILE_SIZE) {
+    if (fileData.size > MAX_FILE_SIZE) {
       return new Response(JSON.stringify({ error: "File too large. Maximum size is 20MB." }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const base64 = base64Encode(new Uint8Array(arrayBuffer));
+    let result: ProcessedResult;
 
-    // Strategy: For images and PDFs, try OCR.space first, then use AI for cleaning.
-    // For DOC/DOCX or if OCR.space fails, fall back to full AI vision pipeline.
+    if (fileType === "image" || fileType === "pdf") {
+      const ocrResult = await extractTextWithOcrSpace(fileData, resolvedFileName, mimeType, ocrSpaceApiKey);
 
-    let result;
-
-    if ((fileType === "image" || fileType === "pdf") && ocrSpaceApiKey) {
-      // Step 1: Extract text with OCR.space
-      const ocrResult = await extractTextWithOcrSpace(base64, mimeType, fileName, ocrSpaceApiKey);
-
-      if (ocrResult.success && ocrResult.text.length > 10) {
-        // Step 2: Clean and structure with AI
-        console.log("OCR.space succeeded, sending to AI for cleaning...");
-
-        const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${lovableApiKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
-            messages: [
-              { role: "system", content: cleaningSystemPrompt },
-              { role: "user", content: `Clean, correct, and structure the following OCR-extracted text. Return ONLY valid JSON.\n\n---\n${ocrResult.text}\n---` },
-            ],
-          }),
-        });
-
-        if (aiResponse.ok) {
-          const aiData = await aiResponse.json();
-          let content = aiData.choices?.[0]?.message?.content || "";
-          content = content.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
-
-          try {
-            result = JSON.parse(content);
-            result.raw_text = ocrResult.text; // preserve original OCR output
-            result.ocr_engine = "ocr.space";
-          } catch {
-            console.error("AI cleaning parse failed, using OCR text directly");
-          }
-        }
-      } else {
-        // OCR.space failed - check specific errors
-        if (ocrResult.error === "RATE_LIMIT") {
-          console.log("OCR.space rate limit, falling back to AI vision");
-        } else if (ocrResult.error === "NO_TEXT") {
-          console.log("OCR.space found no text, falling back to AI vision");
-        } else {
-          console.log(`OCR.space failed (${ocrResult.error}), falling back to AI vision`);
-        }
+      if (!ocrResult.success) {
+        return createErrorResponse(ocrResult.error);
       }
-    }
 
-    // Fallback: Use AI vision pipeline (for DOC/DOCX, or if OCR.space failed)
-    if (!result) {
-      console.log("Using AI vision pipeline for extraction...");
-
-      const systemPrompt = fileType === "image" ? visionSystemPrompt : cleaningSystemPrompt;
-      let userContent: any[];
-
-      if (fileType === "doc") {
-        // For DOC/DOCX, send as file
-        userContent = [
-          { type: "text", text: "Extract ALL text from this document, clean it, and structure it. Return ONLY valid JSON." },
-          { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64}` } },
-        ];
-      } else {
-        // Image or PDF via vision
-        userContent = [
-          { type: "text", text: "Extract, clean, and structure the text from this file. Return ONLY valid JSON." },
-          { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64}` } },
-        ];
-      }
+      result = await cleanExtractedText(ocrResult.text, lovableApiKey);
+    } else {
+      const arrayBuffer = await fileData.arrayBuffer();
+      const base64 = base64Encode(new Uint8Array(arrayBuffer));
 
       const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
@@ -304,8 +342,14 @@ serve(async (req) => {
         body: JSON.stringify({
           model: "google/gemini-2.5-flash",
           messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userContent },
+            { role: "system", content: visionSystemPrompt },
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "Extract, clean, and structure the text from this file. Return ONLY valid JSON." },
+                { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64}` } },
+              ],
+            },
           ],
         }),
       });
@@ -324,22 +368,18 @@ serve(async (req) => {
       content = content.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
 
       try {
-        result = JSON.parse(content);
+        result = JSON.parse(content) as ProcessedResult;
         result.ocr_engine = "ai-vision";
       } catch {
-        console.error("Failed to parse AI response:", content.substring(0, 500));
-        return new Response(JSON.stringify({
-          error: "AI returned invalid response format",
-          raw_response: content.substring(0, 1000),
-        }), {
+        console.error("Failed to parse AI response as JSON:", content.substring(0, 500));
+        return new Response(JSON.stringify({ error: "AI returned invalid response format" }), {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
     }
 
-    // Validate required fields
-    const requiredFields = ["raw_text", "clean_text", "confidence_score", "quality"];
+    const requiredFields: Array<keyof ProcessedResult> = ["raw_text", "clean_text", "confidence_score", "quality"];
     for (const field of requiredFields) {
       if (!(field in result)) {
         return new Response(JSON.stringify({ error: `Missing field in response: ${field}` }), {
@@ -349,14 +389,11 @@ serve(async (req) => {
       }
     }
 
-    // Ensure arrays and defaults
     result.uncertain_segments = result.uncertain_segments || [];
     result.topics = result.topics || [];
     result.key_concepts = result.key_concepts || [];
     result.structured_content = result.structured_content || result.clean_text;
     result.file_type = fileType;
-
-    console.log(`Processed ${fileType} via ${result.ocr_engine}: confidence=${result.confidence_score}, quality=${result.quality}, topics=${result.topics.length}`);
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
