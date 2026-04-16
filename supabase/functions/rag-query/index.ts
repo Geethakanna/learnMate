@@ -91,7 +91,26 @@ serve(async (req) => {
       if (levelData?.actual_level) effectiveLevel = levelData.actual_level;
     } catch {}
 
-    console.log(`Effective level for response: ${effectiveLevel}`);
+    // ADAPTIVE: Downgrade complexity if topic is in weak area
+    const isWeakArea = userPerformance.weakAreas.includes("current_document");
+    if (isWeakArea) {
+      const downgradeMap: Record<string, string> = { "Advanced": "Intermediate", "Intermediate": "Beginner" };
+      if (downgradeMap[effectiveLevel]) {
+        console.log(`Weak area detected: downgrading ${effectiveLevel} → ${downgradeMap[effectiveLevel]}`);
+        effectiveLevel = downgradeMap[effectiveLevel];
+      }
+    }
+
+    // ADAPTIVE: Further adjust based on accuracy
+    const adaptiveHint = userPerformance.totalAttempts >= 5
+      ? (userPerformance.accuracy < 40
+        ? "The user is struggling. Simplify further, add extra clarity, and reinforce basics."
+        : userPerformance.accuracy >= 85
+        ? "The user is performing well. Be more concise and increase depth."
+        : "")
+      : "";
+
+    console.log(`Effective level for response: ${effectiveLevel}, adaptive: ${adaptiveHint || "none"}`);
 
     console.log(`Processing question for document ${documentId}: ${question}`);
 
