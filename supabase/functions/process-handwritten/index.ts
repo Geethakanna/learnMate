@@ -8,6 +8,7 @@ const corsHeaders = {
 };
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
+const OCR_SPACE_MAX_SIZE = 1024 * 1024; // 1MB free tier limit
 
 type SupportedFileType = "image" | "pdf" | "doc";
 type OcrErrorCode = "RATE_LIMIT" | "NO_TEXT" | "SERVICE_ERROR" | "UNSUPPORTED_OR_CORRUPTED";
@@ -321,15 +322,71 @@ serve(async (req) => {
 
     let result: ProcessedResult;
 
-    if (fileType === "image" || fileType === "pdf") {
+    if ((fileType === "image" || fileType === "pdf") && fileData.size <= OCR_SPACE_MAX_SIZE) {
+      console.log(`Using OCR.space (file size: ${fileData.size} bytes)`);
       const ocrResult = await extractTextWithOcrSpace(fileData, resolvedFileName, mimeType, ocrSpaceApiKey);
 
-      if (!ocrResult.success) {
+      if (ocrResult.success) {
+        result = await cleanExtractedText(ocrResult.text, lovableApiKey);
+      } else if (ocrResult.error === "RATE_LIMIT") {
         return createErrorResponse(ocrResult.error);
+      } else {
+        // Fall through to AI vision
+        console.log(`OCR.space failed (${ocrResult.error}), falling back to AI vision`);
+        result = null as any;
+      }
+    }
+
+    if (!result && (fileType === "image" || fileType === "pdf")) {
+      console.log(`Using AI vision (file size: ${fileData.size} bytes)`);
+      const arrayBuffer = await fileData.arrayBuffer();
+      const base64 = base64Encode(new Uint8Array(arrayBuffer));
+
+      const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${lovableApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages: [
+            { role: "system", content: visionSystemPrompt },
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "Extract, clean, and structure the text from this file. Return ONLY valid JSON." },
+                { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64}` } },
+              ],
+            },
+          ],
+        }),
+      });
+
+      if (!aiResponse.ok) {
+        const errorText = await aiResponse.text();
+        console.error("AI vision error:", errorText);
+        return new Response(JSON.stringify({ error: "Failed to process file." }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
-      result = await cleanExtractedText(ocrResult.text, lovableApiKey);
-    } else {
+      const aiData = await aiResponse.json();
+      let content = aiData.choices?.[0]?.message?.content || "";
+      content = content.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+
+      try {
+        result = JSON.parse(content) as ProcessedResult;
+        result.ocr_engine = "ai-vision";
+      } catch {
+        console.error("Failed to parse AI response:", content.substring(0, 500));
+        return new Response(JSON.stringify({ error: "AI returned invalid response format" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    } else if (!result) {
       const arrayBuffer = await fileData.arrayBuffer();
       const base64 = base64Encode(new Uint8Array(arrayBuffer));
 
