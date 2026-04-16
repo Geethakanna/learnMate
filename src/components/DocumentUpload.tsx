@@ -193,7 +193,12 @@ export default function DocumentUpload({ onSuccess, onCancel }: DocumentUploadPr
         body: { filePath, fileName: file.name }
       });
 
-      if (error) throw error;
+      if (error) {
+        const message = error.context && typeof error.context.json === 'function'
+          ? await error.context.json().then((body: any) => body?.error || error.message).catch(() => error.message)
+          : error.message;
+        throw new Error(message || 'Failed to process handwritten notes');
+      }
 
       const extractedText = data?.text || '';
       if (!extractedText) {
@@ -266,7 +271,12 @@ export default function DocumentUpload({ onSuccess, onCancel }: DocumentUploadPr
         body: { filePath, fileName: imageFile.name }
       });
 
-      if (error) throw error;
+      if (error) {
+        const message = error.context && typeof error.context.json === 'function'
+          ? await error.context.json().then((body: any) => body?.error || error.message).catch(() => error.message)
+          : error.message;
+        throw new Error(message || 'Failed to process handwritten notes');
+      }
 
       if (!data || !data.clean_text) {
         throw new Error('Failed to extract text from handwritten notes');
