@@ -8,6 +8,7 @@ const corsHeaders = {
 };
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
+const OCR_SPACE_MAX_SIZE = 1024 * 1024; // 1MB free tier limit
 
 type SupportedFileType = "image" | "pdf" | "doc";
 type OcrErrorCode = "RATE_LIMIT" | "NO_TEXT" | "SERVICE_ERROR" | "UNSUPPORTED_OR_CORRUPTED";
