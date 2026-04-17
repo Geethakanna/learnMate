@@ -15,6 +15,8 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { Send, Bot, User, FileText, Loader2, Sparkles, Quote } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface Document {
   id: string;
