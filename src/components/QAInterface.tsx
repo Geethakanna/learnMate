@@ -203,7 +203,15 @@ export default function QAInterface({ documents, selectedDocument, onSelectDocum
                   }`}
                 >
                   <div className={message.role === 'assistant' ? 'bg-muted rounded-2xl rounded-tl-sm px-4 py-3' : ''}>
-                    <p className="whitespace-pre-wrap">{message.content}</p>
+                    {message.role === 'assistant' ? (
+                      <div className="prose prose-sm dark:prose-invert max-w-none prose-headings:font-display prose-headings:font-semibold prose-h1:text-lg prose-h2:text-base prose-h2:mt-3 prose-h2:mb-2 prose-h3:text-sm prose-p:my-2 prose-p:leading-relaxed prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-strong:text-foreground prose-code:text-accent prose-code:bg-secondary/50 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {message.content}
+                        </ReactMarkdown>
+                      </div>
+                    ) : (
+                      <p className="whitespace-pre-wrap">{message.content}</p>
+                    )}
                   </div>
 
                   {message.citations && message.citations.length > 0 && (
