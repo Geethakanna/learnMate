@@ -7,7 +7,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB limit
+const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB - aligned with process-handwritten
+
+function jsonResponse(status: number, body: Record<string, unknown>) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -17,15 +24,17 @@ serve(async (req) => {
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse(401, { error: "Unauthorized" });
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
+
+    if (!lovableApiKey) {
+      console.error("Missing LOVABLE_API_KEY");
+      return jsonResponse(500, { error: "Server misconfigured: missing AI key" });
+    }
 
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
@@ -34,19 +43,19 @@ serve(async (req) => {
     const token = authHeader.replace("Bearer ", "");
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse(401, { error: "Unauthorized" });
     }
 
-    const { filePath, fileName } = await req.json();
+    let body: { filePath?: string; fileName?: string };
+    try {
+      body = await req.json();
+    } catch {
+      return jsonResponse(400, { error: "Invalid JSON body" });
+    }
 
+    const { filePath, fileName } = body;
     if (!filePath) {
-      return new Response(JSON.stringify({ error: "Missing filePath" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse(400, { error: "Missing filePath" });
     }
 
     const { data: fileData, error: downloadError } = await supabase.storage
@@ -55,23 +64,24 @@ serve(async (req) => {
 
     if (downloadError || !fileData) {
       console.error("Download error:", downloadError);
-      return new Response(JSON.stringify({ error: "Failed to download file" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      return jsonResponse(500, { error: "Failed to download PDF from storage" });
+    }
+
+    if (fileData.size > MAX_FILE_SIZE) {
+      return jsonResponse(400, {
+        error: `PDF is too large (${(fileData.size / 1024 / 1024).toFixed(1)}MB). Maximum allowed is 20MB.`,
       });
     }
 
     const arrayBuffer = await fileData.arrayBuffer();
-
-    if (arrayBuffer.byteLength > MAX_FILE_SIZE) {
-      return new Response(JSON.stringify({ error: "File too large. Maximum size is 10MB." }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (arrayBuffer.byteLength === 0) {
+      return jsonResponse(400, { error: "PDF file is empty" });
     }
 
-    // Use Deno std base64 encoder — memory-safe, no spread operator
+    // Memory-safe base64 encoding
     const base64 = base64Encode(new Uint8Array(arrayBuffer));
+
+    console.log(`Extracting PDF: ${fileName} (${(arrayBuffer.byteLength / 1024).toFixed(1)} KB)`);
 
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -87,13 +97,11 @@ serve(async (req) => {
             content: [
               {
                 type: "text",
-                text: "Extract ALL text content from this PDF document. Preserve the structure with paragraphs separated by blank lines. Include all text, headings, and content. Return ONLY the extracted text, no commentary.",
+                text: "Extract ALL text content from this PDF document. Preserve the structure with paragraphs separated by blank lines. Include all text, headings, tables, and content. Return ONLY the extracted text, no commentary or markdown fences.",
               },
               {
                 type: "image_url",
-                image_url: {
-                  url: `data:application/pdf;base64,${base64}`,
-                },
+                image_url: { url: `data:application/pdf;base64,${base64}` },
               },
             ],
           },
@@ -103,26 +111,35 @@ serve(async (req) => {
 
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
-      console.error("AI extraction error:", errorText);
-      return new Response(JSON.stringify({ error: "Failed to extract text from PDF" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      console.error("AI extraction error:", aiResponse.status, errorText.slice(0, 500));
+
+      if (aiResponse.status === 429) {
+        return jsonResponse(429, { error: "AI rate limit reached. Please try again in a moment." });
+      }
+      if (aiResponse.status === 402) {
+        return jsonResponse(402, { error: "AI credits exhausted. Please add credits to continue." });
+      }
+      if (aiResponse.status === 400 || aiResponse.status === 415) {
+        return jsonResponse(400, { error: "PDF could not be processed. It may be corrupted, password-protected, or unsupported." });
+      }
+      return jsonResponse(502, { error: "AI service error. Please retry." });
     }
 
     const aiData = await aiResponse.json();
-    const extractedText = aiData.choices?.[0]?.message?.content || "";
+    const extractedText = (aiData.choices?.[0]?.message?.content || "").trim();
+
+    if (!extractedText || extractedText.length < 10) {
+      console.warn(`Extracted text too short (${extractedText.length} chars) from ${fileName}`);
+      return jsonResponse(422, {
+        error: "No readable text found in PDF. It may be a scanned/image-only document. Try uploading via the Notes tab for OCR.",
+      });
+    }
 
     console.log(`Extracted ${extractedText.length} characters from ${fileName}`);
 
-    return new Response(JSON.stringify({ text: extractedText }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse(200, { text: extractedText });
   } catch (error) {
-    console.error("PDF extraction error:", error);
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    console.error("PDF extraction exception:", error);
+    return jsonResponse(500, { error: "Internal server error during PDF extraction" });
   }
 });
